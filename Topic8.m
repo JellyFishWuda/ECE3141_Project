@@ -1,0 +1,107 @@
+% Group Members: Wong Jun-Shen 35135840 , Ryan Tan Yi Xing 34852409
+% Date: 12/5/2026
+
+clear; clc; close all;
+
+%% Load frame trace data
+frameBytes = readmatrix("films_happy_framesonly.txt");
+frameBytes = frameBytes(~isnan(frameBytes));
+
+N = length(frameBytes);
+frameRate = 30;                 % assume 30 fps, change if needed
+
+%% Choose constant transmission rate
+avgBytes = mean(frameBytes);
+
+rateFactor = 1.10;              % try 1.0, 1.05, 1.10, 1.20
+T = rateFactor * avgBytes;      % constant bytes transmitted per frame time
+
+%% Encoder buffer simulation
+encoderBuffer = zeros(N,1);
+q = 0;
+
+for i = 1:N
+    q = q + frameBytes(i) - T;  % generated minus transmitted
+    
+    if q < 0
+        q = 0;                  % buffer cannot go negative
+    end
+    
+    encoderBuffer(i) = q;
+end
+
+%% Decoder buffer simulation
+startupFrames = 30;             % wait 30 frames before playback starts
+decoderBuffer = zeros(N,1);
+underflow = zeros(N,1);
+
+q = startupFrames * T;          % initial startup buffer
+
+for i = 1:N
+    q = q + T;                  % constant data arrives
+    
+    if i > startupFrames
+        q = q - frameBytes(i);  % decoder consumes frame i
+    end
+    
+    if q < 0
+        underflow(i) = 1;
+        q = 0;
+    end
+    
+    decoderBuffer(i) = q;
+end
+
+%% Delay estimate
+maxEncoderBuffer = max(encoderBuffer);
+maxDecoderBuffer = max(decoderBuffer);
+
+encoderDelayFrames = maxEncoderBuffer / T;
+decoderDelayFrames = startupFrames;
+
+totalDelayFrames = encoderDelayFrames + decoderDelayFrames;
+totalDelaySeconds = totalDelayFrames / frameRate;
+
+%% Print results
+fprintf("Number of frames: %d\n", N);
+fprintf("Average frame size: %.2f bytes\n", avgBytes);
+fprintf("Constant transmission rate T: %.2f bytes/frame\n", T);
+fprintf("Equivalent bitrate: %.2f Mbps\n", T * frameRate * 8 / 1e6);
+
+fprintf("\nEncoder max buffer: %.2f bytes\n", maxEncoderBuffer);
+fprintf("Decoder max buffer: %.2f bytes\n", maxDecoderBuffer);
+fprintf("Number of decoder underflows: %d\n", sum(underflow));
+
+fprintf("\nEstimated encoder delay: %.2f frames\n", encoderDelayFrames);
+fprintf("Startup delay: %.2f frames\n", decoderDelayFrames);
+fprintf("Total delay: %.2f frames = %.2f seconds\n", ...
+    totalDelayFrames, totalDelaySeconds);
+
+%% Plots
+figure;
+plot(frameBytes);
+xlabel("Frame number");
+ylabel("Frame size (bytes)");
+title("Compressed video frame sizes");
+grid on;
+
+figure;
+plot(encoderBuffer);
+xlabel("Frame number");
+ylabel("Buffer occupancy (bytes)");
+title("Encoder buffer occupancy");
+grid on;
+
+figure;
+plot(decoderBuffer);
+xlabel("Frame number");
+ylabel("Buffer occupancy (bytes)");
+title("Decoder buffer occupancy");
+grid on;
+
+figure;
+stem(underflow, "filled");
+xlabel("Frame number");
+ylabel("Underflow event");
+title("Decoder underflow events");
+grid on;
