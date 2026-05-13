@@ -13,7 +13,7 @@ frameRate = 30;                 % assume 30 fps, change if needed
 %% Choose constant transmission rate
 avgBytes = mean(frameBytes);
 
-rateFactor = 1.10;              % try 1.0, 1.05, 1.10, 1.20
+rateFactor = 1.0;              % try 1.0, 1.05, 1.10, 1.20
 T = rateFactor * avgBytes;      % constant bytes transmitted per frame time
 
 %% Encoder buffer simulation

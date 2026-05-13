@@ -1,0 +1,90 @@
+% Group Members: Wong Jun-Shen 35135840 , Ryan Tan Yi Xing 34852409
+% Date: 12/5/2026
+
+clear; clc; close all;
+
+%% Load frame trace data
+frameBytes = readmatrix("films_happy_framesonly.txt");
+frameBytes = frameBytes(~isnan(frameBytes));
+
+N = length(frameBytes);
+frameRate = 30;                 % assume 30 fps, change if needed
+
+% Choose constant transmission rate
+avgBytes = mean(frameBytes);
+
+rateFactor = 0:0.025:1.5;              % try 1.0, 1.05, 1.10, 1.20
+T = zeros(length(rateFactor),1);
+no_underflow = zeros(length(rateFactor),1);
+
+for i = 1:length(rateFactor)
+T(i) = rateFactor(i) * avgBytes;      % constant bytes transmitted per frame time
+
+% Encoder buffer simulation
+encoderBuffer = zeros(N,1);
+q = 0;
+
+for j = 1:N
+    q = q + frameBytes(j) - T(i);  % generated minus transmitted
+    
+    if q < 0
+        q = 0;                  % buffer cannot go negative
+    end
+    
+    encoderBuffer(j) = q;
+end
+
+% Decoder buffer simulation
+startupFrames = 30;             % wait 30 frames before playback starts
+decoderBuffer = zeros(N,1);
+underflow = zeros(N,1);
+
+q = startupFrames * T(i);          % initial startup buffer
+
+for j = 1:N
+    q = q + T(i);                  % constant data arrives
+    
+    if j > startupFrames
+        q = q - frameBytes(j);  % decoder consumes frame i
+    end
+    
+    if q < 0
+        underflow(j) = 1;
+        q = 0;
+    end
+    
+    decoderBuffer(j) = q;
+end
+
+
+no_underflow(i) = sum(underflow);
+% Print results
+fprintf("Average frame size: %.2f bytes\n", avgBytes);
+fprintf("Constant transmission rate T: %.2f bytes/frame\n", T(i));
+fprintf("Equivalent bitrate: %.2f Mbps\n", T(i) * frameRate * 8 / 1e6);
+fprintf("Number of decoder underflows: %d\n", sum(underflow));
+fprintf("\n");
+figure;
+
+plot(T,no_underflow,'Marker','o','Color','r','MarkerFaceColor','r');
+hold on;
+grid on;
+xlabel("Transmission Rate, T (bytes/frame)");
+ylabel("Number of Decoder Buffer Underflow Events");
+title ("Transmission Rate vs Number of Decoder Buffer Underflow Events");
+%legend("Number of Decoder Underflow Events","Decoder Underflow = 0"); 
+end
+%%
+index = (T==avgBytes);
+y_value = no_underflow(index);
+
+figure;
+
+plot(T,no_underflow,'Marker','o','Color','r','MarkerFaceColor','r');
+hold on;
+plot(avgBytes,y_value,'o','Color','b','MarkerFaceColor','b');
+grid on;
+xlabel("Transmission Rate, T (bytes/frame)");
+ylabel("Number of Decoder Buffer Underflow Events");
+title ("Transmission Rate vs Number of Decoder Buffer Underflow Events");
+legend("Number of Decoder Underflow Events","Decoder Underflow = 0"); 
