@@ -8,100 +8,102 @@ frameBytes = readmatrix("films_happy_framesonly.txt");
 frameBytes = frameBytes(~isnan(frameBytes));
 
 N = length(frameBytes);
-frameRate = 30;                 % assume 30 fps, change if needed
+frameRate = 30;
 
-%% Choose constant transmission rate
+%% Transmission rate settings
 avgBytes = mean(frameBytes);
+rateFactor = 0.25:0.25:2;
+T = rateFactor * avgBytes;
 
-rateFactor = 1.10;              % try 1.0, 1.05, 1.10, 1.20
-T = rateFactor * avgBytes;      % constant bytes transmitted per frame time
+%% Startup buffering settings
+startupFrameOptions = [15 30 60];
 
-%% Encoder buffer simulation
-encoderBuffer = zeros(N,1);
-q = 0;
+%% Store results
+numUnderflows = zeros(length(rateFactor), length(startupFrameOptions));
+startupDelaySeconds = startupFrameOptions / frameRate;
 
-for i = 1:N
-    q = q + frameBytes(i) - T;  % generated minus transmitted
-    
-    if q < 0
-        q = 0;                  % buffer cannot go negative
+%% Main simulation
+for s = 1:length(startupFrameOptions)
+
+    startupFrames = startupFrameOptions(s);
+
+    figure;
+    hold on;
+
+    for i = 1:length(rateFactor)
+
+        currentT = T(i);
+
+        %% Decoder buffer simulation
+        decoderBuffer = zeros(N,1);
+        underflow = zeros(N,1);
+
+        q = startupFrames * currentT;
+
+        for j = 1:N
+            q = q + currentT;
+
+            if j > startupFrames
+                q = q - frameBytes(j);
+            end
+
+            if q < 0
+                underflow(j) = 1;
+                q = 0;
+            end
+
+            decoderBuffer(j) = q;
+        end
+
+        numUnderflows(i,s) = sum(underflow);
+
+        plot(decoderBuffer, ...
+            'DisplayName', sprintf('rateFactor = %.2f', rateFactor(i)));
     end
-    
-    encoderBuffer(i) = q;
+
+    xlabel("Frame number");
+    ylabel("Decoder buffer occupancy (bytes)");
+    title(sprintf("Decoder Buffer Occupancy, Startup Frames = %d", startupFrames));
+    legend show;
+    legend('Location','best');
+    grid on;
 end
 
-%% Decoder buffer simulation
-startupFrames = 1;             % wait 30 frames before playback starts
-decoderBuffer = zeros(N,1);
-underflow = zeros(N,1);
-start
-q = startupFrames * T;          % initial startup buffer
+%% Plot underflows vs startup buffering
+figure;
+hold on;
 
-for i = 1:N
-    q = q + T;                  % constant data arrives
-    
-    if i > startupFrames
-        q = q - frameBytes(i);  % decoder consumes frame i
-    end
-    
-    if q < 0
-        underflow(i) = 1;
-        q = 0;
-    end
-    
-    decoderBuffer(i) = q;
+for i = 1:length(rateFactor)
+    plot(startupFrameOptions, numUnderflows(i,:), '-o', ...
+        'DisplayName', sprintf('rateFactor = %.2f', rateFactor(i)));
 end
 
-%% Delay estimate
-maxEncoderBuffer = max(encoderBuffer);
-maxDecoderBuffer = max(decoderBuffer);
-
-encoderDelayFrames = maxEncoderBuffer / T;
-decoderDelayFrames = startupFrames;
-
-totalDelayFrames = encoderDelayFrames + decoderDelayFrames;
-totalDelaySeconds = totalDelayFrames / frameRate;
-
-%% Print results
-fprintf("Number of frames: %d\n", N);
-fprintf("Average frame size: %.2f bytes\n", avgBytes);
-fprintf("Constant transmission rate T: %.2f bytes/frame\n", T);
-fprintf("Equivalent bitrate: %.2f Mbps\n", T * frameRate * 8 / 1e6);
-
-fprintf("\nEncoder max buffer: %.2f bytes\n", maxEncoderBuffer);
-fprintf("Decoder max buffer: %.2f bytes\n", maxDecoderBuffer);
-fprintf("Number of decoder underflows: %d\n", sum(underflow));
-
-fprintf("\nEstimated encoder delay: %.2f frames\n", encoderDelayFrames);
-fprintf("Startup delay: %.2f frames\n", decoderDelayFrames);
-fprintf("Total delay: %.2f frames = %.2f seconds\n", ...
-    totalDelayFrames, totalDelaySeconds);
-
-%% Plots
-figure;
-plot(frameBytes);
-xlabel("Frame number");
-ylabel("Frame size (bytes)");
-title("Compressed video frame sizes");
+xlabel("Startup buffering (frames)");
+ylabel("Number of decoder underflows");
+title("Effect of Startup Buffering on Decoder Underflow");
+legend show;
+legend('Location','bestoutside');
 grid on;
 
-figure;
-plot(encoderBuffer);
-xlabel("Frame number");
-ylabel("Buffer occupancy (bytes)");
-title("Encoder buffer occupancy");
-grid on;
+%% Display summary table
+resultsTable = table();
 
-figure;
-plot(decoderBuffer);
-xlabel("Frame number");
-ylabel("Buffer occupancy (bytes)");
-title("Decoder buffer occupancy");
-grid on;
+for i = 1:length(rateFactor)
+    for s = 1:length(startupFrameOptions)
 
-figure;
-stem(underflow, "filled");
-xlabel("Frame number");
-ylabel("Underflow event");
-title("Decoder underflow events");
-grid on;
+        newRow = table( ...
+            rateFactor(i), ...
+            T(i), ...
+            startupFrameOptions(s), ...
+            startupDelaySeconds(s), ...
+            numUnderflows(i,s), ...
+            'VariableNames', ...
+            {'RateFactor', 'TransmissionBytesPerFrame', ...
+             'StartupFrames', 'StartupDelaySeconds', 'Underflows'} ...
+        );
+
+        resultsTable = [resultsTable; newRow];
+    end
+end
+
+disp(resultsTable);

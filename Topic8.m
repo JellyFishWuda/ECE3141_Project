@@ -4,7 +4,8 @@
 clear; clc; close all;
 
 %% Load frame trace data
-frameBytes = readmatrix("films_happy_framesonly.txt");
+% frameBytes = readmatrix("films_happy_framesonly.txt");
+frameBytes = readmatrix("tronlegacy_framesonly.txt");
 frameBytes = frameBytes(~isnan(frameBytes));
 
 N = length(frameBytes);
@@ -16,7 +17,7 @@ rateFactor = 0.25:0.25:2;
 T = rateFactor * avgBytes;
 
 %% Startup buffering settings
-startupFrameOptions = [0 5 15 30 60];
+startupFrameOptions = [15 30 60];
 
 %% Store results
 numUnderflows = zeros(length(rateFactor), length(startupFrameOptions));
@@ -82,7 +83,7 @@ xlabel("Startup buffering (frames)");
 ylabel("Number of decoder underflows");
 title("Effect of Startup Buffering on Decoder Underflow");
 legend show;
-legend('Location','best');
+legend('Location','bestoutside');
 grid on;
 
 %% Display summary table
